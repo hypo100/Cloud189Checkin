@@ -1,8 +1,5 @@
 name: 天翼云盘签到
 on:
-  push:
-    branches:
-      - main
   watch:
     types: started
   workflow_dispatch:
@@ -14,17 +11,20 @@ jobs:
     runs-on: ubuntu-latest
     environment: user
     steps:
-      # ==========【新增】1. 获取北京时间，生成缓存key ==========
+      # ========== 【挪到最前面】先检出代码，保证git环境就绪 ==========
+      - name: 🔀 Check out code
+        uses: actions/checkout@main
+      # ========== 1. 获取北京时间日期 ==========
       - name: 获取北京时间日期
         id: date
         run: echo "date=$(TZ='Asia/Shanghai' date +%Y-%m-%d)" >> $GITHUB_OUTPUT
-      # ==========【新增】2. 恢复签到成功标记缓存 ==========
+      # ========== 2. 恢复签到成功标记缓存 ==========
       - name: 恢复签到标记缓存
         uses: actions/cache@v4
         with:
           path: .last_success_date
           key: tianyi-sign-success-${{ steps.date.outputs.date }}
-      # ==========【新增】3. 判断今日是否已签到，已签到直接退出 ==========
+      # ========== 3. 判断今日是否已签到，已签到直接退出 ==========
       - name: 判断今日是否签到成功
         id: check_sign
         run: |
@@ -38,14 +38,12 @@ jobs:
             fi
           fi
           echo "今日尚未签到，继续执行签到任务"
-      # ==========【修改】随机延时 60 ~ 360秒（1~6分钟） ==========
+      # ========== 随机延时 60 ~ 360秒 ==========
       - name: 随机延迟防风控（1~6分钟）
         run: |
           delay=$((RANDOM % 301 + 60))
           echo "随机延时 ${delay} 秒后开始后续流程"
           sleep $delay
-      - name: 🔀 Check out code
-        uses: actions/checkout@main
       - name: 🔨 Setup Node.js environment
         uses: actions/setup-node@main
         with:
@@ -77,7 +75,7 @@ jobs:
           timeout_minutes: 30
           max_attempts: 3
           command: npm start
-      # ==========【新增】4. 签到成功，写入今日日期并保存缓存 ==========
+      # ========== 签到成功，写入今日日期并保存缓存 ==========
       - name: 记录今日签到成功标记
         if: success()
         run: |
@@ -101,15 +99,15 @@ jobs:
         with:
           path: .token
           key: cloud189-token-${{ env.TOKEN_HASH }}
-      - name: 🚗 Keep Running
-        if: github.event_name == 'schedule'
+      # ========== Keep Running 保活代码【保留】 ==========
+      - name: Keep Running
+        if: success()
         run: |
-          git config --local user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
-          git config --local user.name "${{ github.actor }}"
-          git remote set-url origin https://${{ github.actor }}:${{ github.token }}@github.com/${{ github.repository }}
-          git pull --rebase --autostash
-          git commit --allow-empty -m "Keep Running..."
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git commit --allow-empty -m "keep alive"
           git push
+      # ========== 清理旧运行记录 ==========
       - name: 🎉 Delete old workflow run
         uses: Mattraks/delete-workflow-runs@main
         with:
