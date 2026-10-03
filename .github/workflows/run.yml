@@ -7,8 +7,8 @@ on:
     types: started
   workflow_dispatch:
   schedule:
-    - cron: 35 2 * * *    # UTC 02:35 = 北京时间10:35
-    - cron: 0 13 * * *    # UTC 13:00 = 北京时间21:00
+    - cron: 35 4 * * *    # UTC 04:35 = 北京时间12:35
+    - cron: 13 7 * * *    # UTC 7:13 = 北京时间15:13
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
