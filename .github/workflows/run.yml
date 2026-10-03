@@ -7,29 +7,26 @@ on:
     types: started
   workflow_dispatch:
   schedule:
-    - cron: 35 2 * * *
+    - cron: 35 2 * * *    # UTC 02:35 = 北京时间10:35
+    - cron: 0 13 * * *    # UTC 13:00 = 北京时间21:00
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     environment: user
     steps:
-      - name: 🔀 random delay 0-300 seconds
-        run: sleep $((RANDOM % 301))
-
+      - name: 🔀 random delay 0-600 seconds（0~10分钟随机延时）
+        run: sleep $((RANDOM % 601))
       - name: 🔌 Check out code
         uses: actions/checkout@main
-
       - name: 🔨 Setup Node.js environment
         uses: actions/setup-node@main
         with:
           node-version: 18
           cache: npm
-
       - name: 👾 Check if Debug is true
         if: vars.debug == '1'
         run: |
           echo "CLOUD189_VERBOSE=1" >> $GITHUB_ENV
-      
       - name: 📹 Restore cached Cookie
         id: cache-cookie-restore
         uses: actions/cache/restore@v4
@@ -37,7 +34,6 @@ jobs:
           path: .token
           key: cloud189-token-${{ hashFiles('.token/*.json') }}
           restore-keys: cloud189-token-
-
       - name: 🔧 Init secrets
         uses: shine1594/secrets-to-env-action@master
         with:
@@ -45,30 +41,25 @@ jobs:
           secrets_env: production
           prefix_prod: ""
           file_name_prod: .env
-
       - name: 📡 Init dependencies
         run: npm install
-
       - name: 🚀 Run
         uses: nick-fields/retry@master
         with:
           timeout_minutes: 30
           max_attempts: 3
           command: npm start
-
       - name: 🔑 Compute token hash
         if: always()
         run: |
           NEW_HASH=$(find .token -name '*.json' -exec sha256sum {} \; 2>/dev/null | sha256sum | cut -d' ' -f1)
           echo "TOKEN_HASH=${NEW_HASH}" >> $GITHUB_ENV
-
       - name: 📹 Save cached Cookie
         if: always() && env.TOKEN_HASH != ''
         uses: actions/cache/save@v4
         with:
           path: .token
           key: cloud189-token-${{ env.TOKEN_HASH }}
-
       - name: 🚗 Keep Running
         if: github.event_name == 'schedule'
         run: |
@@ -78,7 +69,6 @@ jobs:
           git pull --rebase --autostash
           git commit --allow-empty -m "Keep Running..."
           git push
-
       - name: 🎉 Delete old workflow run
         uses: Mattraks/delete-workflow-runs@main
         with:
