@@ -18,14 +18,12 @@ jobs:
       - name: 获取北京时间日期
         id: date
         run: echo "date=$(TZ='Asia/Shanghai' date +%Y-%m-%d)" >> $GITHUB_OUTPUT
-
       # ==========【新增】2. 恢复签到成功标记缓存 ==========
       - name: 恢复签到标记缓存
         uses: actions/cache@v4
         with:
           path: .last_success_date
           key: tianyi-sign-success-${{ steps.date.outputs.date }}
-
       # ==========【新增】3. 判断今日是否已签到，已签到直接退出 ==========
       - name: 判断今日是否签到成功
         id: check_sign
@@ -40,28 +38,23 @@ jobs:
             fi
           fi
           echo "今日尚未签到，继续执行签到任务"
-
       # ==========【修改】随机延时 60 ~ 360秒（1~6分钟） ==========
       - name: 随机延迟防风控（1~6分钟）
         run: |
           delay=$((RANDOM % 301 + 60))
           echo "随机延时 ${delay} 秒后开始后续流程"
           sleep $delay
-
       - name: 🔀 Check out code
         uses: actions/checkout@main
-
       - name: 🔨 Setup Node.js environment
         uses: actions/setup-node@main
         with:
           node-version: 18
           cache: npm
-
       - name: 📌 Check if Debug is true
         if: vars.debug == '1'
         run: |
           echo "CLOUD189_VERBOSE=1" >> $GITHUB_ENV
-
       - name: 📹 Restore cached Cookie
         id: cache-cookie-restore
         uses: actions/cache/restore@v4
@@ -69,7 +62,6 @@ jobs:
           path: .token
           key: cloud189-token-${{ hashFiles('.token/*.json') }}
           restore-keys: cloud189-token-
-
       - name: 🔧 Init secrets
         uses: shine1594/secrets-to-env-action@master
         with:
@@ -77,17 +69,14 @@ jobs:
           secrets_env: production
           prefix_prod: ""
           file_name_prod: .env
-
       - name: 📡 Init dependencies
         run: npm install
-
       - name: 🚀 Run签到脚本
         uses: nick-fields/retry@master
         with:
           timeout_minutes: 30
           max_attempts: 3
           command: npm start
-
       # ==========【新增】4. 签到成功，写入今日日期并保存缓存 ==========
       - name: 记录今日签到成功标记
         if: success()
@@ -95,27 +84,23 @@ jobs:
           date_str=$(TZ='Asia/Shanghai' date '+%Y-%m-%d')
           echo "$date_str" > .last_success_date
           echo "签到成功，记录日期：$date_str"
-
       - name: 保存签到标记缓存
         if: success()
         uses: actions/cache@v4
         with:
           path: .last_success_date
           key: tianyi-sign-success-${{ steps.date.outputs.date }}
-
       - name: 🔑 Compute token hash
         if: always()
         run: |
           NEW_HASH=$(find .token -name '*.json' -exec sha256sum {} \; 2>/dev/null | sha256sum | cut -d' ' -f1)
           echo "TOKEN_HASH=${NEW_HASH}" >> $GITHUB_ENV
-
       - name: 📹 Save cached Cookie
         if: always() && env.TOKEN_HASH != ''
         uses: actions/cache/save@v4
         with:
           path: .token
           key: cloud189-token-${{ env.TOKEN_HASH }}
-
       - name: 🚗 Keep Running
         if: github.event_name == 'schedule'
         run: |
@@ -125,7 +110,6 @@ jobs:
           git pull --rebase --autostash
           git commit --allow-empty -m "Keep Running..."
           git push
-
       - name: 🎉 Delete old workflow run
         uses: Mattraks/delete-workflow-runs@main
         with:
