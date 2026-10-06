@@ -61,13 +61,10 @@ jobs:
           path: .token
           key: cloud189-token-${{ hashFiles('.token/*.json') }}
           restore-keys: cloud189-token-
-      # ========= 替换原来的 secrets-to-env-action，原生shell生成.env =========
+      # ========== 生成.env，写入TY_ACCOUNTS，适配cocolone原版项目 ==========
       - name: 🔧 生成 .env 文件
         run: |
-          cat > .env << EOF
-          USER=${{ secrets.USER }}
-          PASSWORD=${{ secrets.PASSWORD }}
-          EOF
+          echo "TY_ACCOUNTS=${{ secrets.TY_ACCOUNTS }}" > .env
       # ========== 安装依赖 ==========
       - name: 📡 Init dependencies
         run: npm install
