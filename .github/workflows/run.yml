@@ -44,10 +44,10 @@ jobs:
             echo "skip=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: 随机延时 60~180秒
+      - name: 随机延时 0~2分钟（0 ~ 119秒）
         if: steps.check_already.outputs.skip == 'false'
         run: |
-          DELAY=$((60 + RANDOM % 120))
+          DELAY=$((RANDOM % 120))
           echo "等待${DELAY}秒"
           sleep $DELAY
 
