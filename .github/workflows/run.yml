@@ -4,105 +4,79 @@ on:
     types: started
   workflow_dispatch:
   schedule:
-    - cron: 35 4 * * *    # UTC 04:35 = 北京时间12:35
-    - cron: 13 7 * * *    # UTC 07:13 = 北京时间15:13
+    - cron: 35 4 * * *    # UTC时间，对应北京时间12:35
+    - cron: 35 7 * * *    # UTC时间，对应北京时间15:35
+env:
+  # 直接把机密注入环境变量，脚本直接读取，不需要生成.env！！
+  TY_ACCOUNTS: ${{ secrets.TY_ACCOUNTS }}
 permissions:
   contents: write
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     steps:
-      # ========== 【挪到最前面】先检出代码，保证git环境就绪 ==========
       - name: 🔀 Check out code
         uses: actions/checkout@v4
-      # ========== 1. 获取北京时间日期 ==========
+
       - name: 获取北京时间日期
         id: date
-        run: echo "date=$(TZ='Asia/Shanghai' date +%Y-%m-%d)" >> $GITHUB_OUTPUT
-      # ========== 2. 恢复签到成功标记缓存 ==========
-      - name: 恢复签到标记缓存
+        run: echo "date=$(TZ=Asia/Shanghai date +%Y-%m-%d)" >> $GITHUB_OUTPUT
+
+      - name: 🔄 恢复签到标记缓存
         uses: actions/cache@v5
         with:
-          path: .last_success_date
-          key: tianyi-sign-success-${{ steps.date.outputs.date }}
-      # ========== 3. 判断今日是否已签到，已签到直接退出 ==========
-      - name: 判断今日是否签到成功
-        id: check_sign
+          path: .last_checkin_date
+          key: ${{ runner.os }}-lastcheckin-${{ github.ref }}
+
+      - name: 判断今日是否已经签到
+        id: check_already
         run: |
-          current_date=$(TZ='Asia/Shanghai' date '+%Y-%m-%d')
-          echo "当前北京时间日期：$current_date"
-          if [ -f .last_success_date ]; then
-            last_date=$(cat .last_success_date)
-            if [ "$last_date" = "$current_date" ]; then
-              echo "今日已经签到成功，跳过本次签到流程，不调用天翼接口"
-              exit 0
+          if [ -f .last_checkin_date ]; then
+            LAST=$(cat .last_checkin_date)
+            TODAY=${{ steps.date.outputs.date }}
+            if [ "$LAST" = "$TODAY" ]; then
+              echo "skip=true" >> $GITHUB_OUTPUT
+              echo "今日已经签到，跳过登录签到步骤"
+            else
+              echo "skip=false" >> $GITHUB_OUTPUT
             fi
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
           fi
-          echo "今日尚未签到，继续执行签到任务"
-      # ========== 随机延时 60 ~ 360秒 ==========
-      - name: 随机延迟防风控（1~6分钟）
+
+      - name: 随机延时 60~180秒
+        if: steps.check_already.outputs.skip == 'false'
         run: |
-          delay=$((RANDOM % 301 + 60))
-          echo "随机延时 ${delay} 秒后开始后续流程"
-          sleep $delay
-      - name: 🔨 Setup Node.js environment
+          DELAY=$((60 + RANDOM % 120))
+          echo "等待${DELAY}秒"
+          sleep $DELAY
+
+      - name: 🔧 Setup Node.js
+        if: steps.check_already.outputs.skip == 'false'
         uses: actions/setup-node@v4
         with:
           node-version: 18
           cache: npm
-      - name: 📌 Check if Debug is true
-        if: vars.debug == '1'
-        run: |
-          echo "CLOUD189_VERBOSE=1" >> $GITHUB_ENV
-      - name: 📹 Restore cached Cookie
-        id: cache-cookie-restore
-        uses: actions/cache/restore@v5
-        with:
-          path: .token
-          key: cloud189-token-${{ hashFiles('.token/*.json') }}
-          restore-keys: cloud189-token-
-      # ========== 生成.env，写入TY_ACCOUNTS，适配cocolone原版项目 ==========
-      - name: 🔧 生成 .env 文件
-        run: |
-          echo "TY_ACCOUNTS=${{ secrets.TY_ACCOUNTS }}" > .env
-      # ========== 安装依赖 ==========
-      - name: 📡 Init dependencies
+
+      - name: 📦 Install dependencies
+        if: steps.check_already.outputs.skip == 'false'
         run: npm install
+
       - name: 🚀 Run签到脚本
+        if: steps.check_already.outputs.skip == 'false'
         uses: nick-fields/retry@v3
         with:
-          timeout_minutes: 30
+          timeout_minutes: 3
           max_attempts: 3
           command: npm start
-      # ========== 签到成功，写入今日日期并保存缓存 ==========
-      - name: 记录今日签到成功标记
-        if: success()
-        run: |
-          date_str=$(TZ='Asia/Shanghai' date '+%Y-%m-%d')
-          echo "$date_str" > .last_success_date
-          echo "签到成功，记录日期：$date_str"
-      - name: 保存签到标记缓存
-        if: success()
+
+      - name: ✅ 记录今日签到成功标记
+        if: steps.check_already.outputs.skip == 'false' && success()
+        run: echo ${{ steps.date.outputs.date }} > .last_checkin_date
+
+      - name: 💾 Save cached Cookie
+        if: steps.check_already.outputs.skip == 'false'
         uses: actions/cache@v5
         with:
-          path: .last_success_date
-          key: tianyi-sign-success-${{ steps.date.outputs.date }}
-      - name: 🔑 Compute token hash
-        if: always()
-        run: |
-          NEW_HASH=$(find .token -name '*.json' -exec sha256sum {} \; 2>/dev/null | sha256sum | cut -d' ' -f1)
-          echo "TOKEN_HASH=${NEW_HASH}" >> $GITHUB_ENV
-      - name: 📹 Save cached Cookie
-        if: always() && env.TOKEN_HASH != ''
-        uses: actions/cache/save@v5
-        with:
           path: .token
-          key: cloud189-token-${{ env.TOKEN_HASH }}
-      # ========== 清理旧运行记录 ==========
-      - name: 🎉 Delete old workflow run
-        uses: Mattraks/delete-workflow-runs@v2
-        with:
-          token: ${{ github.token }}
-          repository: ${{ github.repository }}
-          retain_days: 0
-          keep_minimum_runs: 50
+          key: ${{ runner.os }}-token-${{ github.ref }}
