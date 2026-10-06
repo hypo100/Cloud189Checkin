@@ -3,9 +3,11 @@ on:
   watch:
     types: started
   workflow_dispatch:
-  schedule:
+    schedule:
     - cron: 35 4 * * *    # UTC 04:35 = 北京时间12:35
     - cron: 13 7 * * *    # UTC 07:13 = 北京时间15:13
+permissions:
+  contents: write
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
@@ -13,14 +15,14 @@ jobs:
     steps:
       # ========== 【挪到最前面】先检出代码，保证git环境就绪 ==========
       - name: 🔀 Check out code
-        uses: actions/checkout@main
+        uses: actions/checkout@v4
       # ========== 1. 获取北京时间日期 ==========
       - name: 获取北京时间日期
         id: date
         run: echo "date=$(TZ='Asia/Shanghai' date +%Y-%m-%d)" >> $GITHUB_OUTPUT
       # ========== 2. 恢复签到成功标记缓存 ==========
       - name: 恢复签到标记缓存
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .last_success_date
           key: tianyi-sign-success-${{ steps.date.outputs.date }}
@@ -45,7 +47,7 @@ jobs:
           echo "随机延时 ${delay} 秒后开始后续流程"
           sleep $delay
       - name: 🔨 Setup Node.js environment
-        uses: actions/setup-node@main
+        uses: actions/setup-node@v4
         with:
           node-version: 18
           cache: npm
@@ -55,13 +57,13 @@ jobs:
           echo "CLOUD189_VERBOSE=1" >> $GITHUB_ENV
       - name: 📹 Restore cached Cookie
         id: cache-cookie-restore
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: .token
           key: cloud189-token-${{ hashFiles('.token/*.json') }}
           restore-keys: cloud189-token-
       - name: 🔧 Init secrets
-        uses: shine1594/secrets-to-env-action@master
+        uses: shine1594/secrets-to-env-action@v2
         with:
           secrets: ${{ toJSON(secrets) }}
           secrets_env: production
@@ -70,7 +72,7 @@ jobs:
       - name: 📡 Init dependencies
         run: npm install
       - name: 🚀 Run签到脚本
-        uses: nick-fields/retry@master
+        uses: nick-fields/retry@v3
         with:
           timeout_minutes: 30
           max_attempts: 3
@@ -95,7 +97,7 @@ jobs:
           echo "TOKEN_HASH=${NEW_HASH}" >> $GITHUB_ENV
       - name: 📹 Save cached Cookie
         if: always() && env.TOKEN_HASH != ''
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: .token
           key: cloud189-token-${{ env.TOKEN_HASH }}
@@ -109,7 +111,7 @@ jobs:
           git push
       # ========== 清理旧运行记录 ==========
       - name: 🎉 Delete old workflow run
-        uses: Mattraks/delete-workflow-runs@main
+        uses: Mattraks/delete-workflow-runs@v2
         with:
           token: ${{ github.token }}
           repository: ${{ github.repository }}
