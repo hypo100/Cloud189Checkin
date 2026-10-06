@@ -3,7 +3,7 @@ on:
   watch:
     types: started
   workflow_dispatch:
-    schedule:
+  schedule:
     - cron: 35 4 * * *    # UTC 04:35 = 北京时间12:35
     - cron: 13 7 * * *    # UTC 07:13 = 北京时间15:13
 permissions:
@@ -11,7 +11,6 @@ permissions:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    environment: user
     steps:
       # ========== 【挪到最前面】先检出代码，保证git环境就绪 ==========
       - name: 🔀 Check out code
@@ -86,7 +85,7 @@ jobs:
           echo "签到成功，记录日期：$date_str"
       - name: 保存签到标记缓存
         if: success()
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .last_success_date
           key: tianyi-sign-success-${{ steps.date.outputs.date }}
@@ -101,14 +100,6 @@ jobs:
         with:
           path: .token
           key: cloud189-token-${{ env.TOKEN_HASH }}
-      # ========== Keep Running 保活代码【保留】 ==========
-      - name: Keep Running
-        if: success()
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git commit --allow-empty -m "keep alive"
-          git push
       # ========== 清理旧运行记录 ==========
       - name: 🎉 Delete old workflow run
         uses: Mattraks/delete-workflow-runs@v2
